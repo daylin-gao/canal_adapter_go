@@ -1,0 +1,10 @@
+# 文档 https://github.com/jinzhu/configor
+port: 8080
+
+db:
+  name: car_rental
+  adapter: mysql
+  host: rm-wz9yzwii62w5267e38o.mysql.rds.aliyuncs.com
+  port: 3306
+  user: lifesonic
+  password: lcxadmin@2016
