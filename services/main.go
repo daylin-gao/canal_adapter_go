@@ -93,28 +93,28 @@ func syncEntries (entrys []protocol.Entry) {
 			//fmt.Println(fmt.Sprintf("================> binlog[%s : %d],name[%s,%s], eventType: %s", header.GetLogfileName(), header.GetLogfileOffset(), header.GetSchemaName(), header.GetTableName(), header.GetEventType()))
 
 			for _, rowData := range rowChange.GetRowDatas() {
-				// 更新只需要之后更新后的数据即可
-				if eventType == protocol.EventType_UPDATE {
-					go syncEntry(rowData.GetAfterColumns() , eventType , header.GetSchemaName() , header.GetTableName())
-				} else {
+				// 删除需要更新之前的数据
+				if eventType == protocol.EventType_DELETE {
 					go syncEntry(rowData.GetBeforeColumns() , eventType , header.GetSchemaName() , header.GetTableName())
+				} else {
+					// 更新和新增,需要之后更新后的数据
+					go syncEntry(rowData.GetAfterColumns() , eventType , header.GetSchemaName() , header.GetTableName())
 				}
 			}
 		}
 	}
 }
 
-
 func syncEntry (columns []*protocol.Column ,eventType protocol.EventType ,dbName string , tableName string) {
 	sync := models.NewSync(dbName , tableName)
 	if eventType == protocol.EventType_DELETE {
-		fmt.Println(fmt.Sprintf("---------------------------%s : %s ", dbName, tableName))
-		printColumn(columns)
+		//fmt.Println(fmt.Sprintf("---------------------------%s : %s ", dbName, tableName))
+		//printColumn(columns)
 		sync.DeleteSync(columns)
 	} else if eventType == protocol.EventType_INSERT {
 		//printColumn(columns)
 		sync.InsertSync(columns)
-	} else {
+	} else if eventType == protocol.EventType_UPDATE {
 		sync.UpdateSync(columns)
 	}
 }
