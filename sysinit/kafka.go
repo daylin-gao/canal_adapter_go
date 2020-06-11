@@ -1,16 +1,8 @@
 package sysinit
 
 import (
-"errors"
-"fmt"
-	"github.com/jinzhu/gorm"
-	"os"
-
-"github.com/Shopify/sarama"
-_ "github.com/jinzhu/gorm/dialects/mysql"
-_ "github.com/jinzhu/gorm/dialects/postgres"
-_ "github.com/mattn/go-sqlite3"
-"github.com/gao111/canal-adapter-go/config"
+	"github.com/Shopify/sarama"
+	"github.com/gao111/canal-adapter-go/config"
 )
 
 var (
@@ -36,6 +28,11 @@ func init() {
 	KafkaProducer, err = sarama.NewSyncProducer([]string{config.Config.Kafka.Host+":"+config.Config.Kafka.Port}, kafkaConfig)
 	if err != nil {
 		panic(err)
+	}
+
+	KafkaConsumer, err = sarama.NewConsumer([]string{config.Config.Kafka.Host+":"+config.Config.Kafka.Port}, kafkaConfig)
+	if err != nil {
+		panic("error get consumer")
 	}
 	// 不关闭
 	//defer KafkaProducer.Close()

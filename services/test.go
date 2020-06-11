@@ -81,7 +81,7 @@ func SaramaConsumer() {
 	fmt.Println("333333")
 
 	//根据消费者获取指定的主题分区的消费者,Offset这里指定为获取最新的消息.
-	partitionConsumer, err := consumer.ConsumePartition("porter_test", 0, sarama.OffsetNewest)
+	partitionConsumer, err := consumer.ConsumePartition("canal_consumer", 0, sarama.OffsetNewest)
 	if err != nil {
 		fmt.Println("error get partition consumer", err)
 	}

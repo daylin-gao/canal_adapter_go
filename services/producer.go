@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 
 	"github.com/gao111/canal-adapter-go/client"
-	"github.com/gao111/canal-adapter-go/models"
 	protocol "github.com/gao111/canal-adapter-go/protocol"
 	"github.com/golang/protobuf/proto"
 	"github.com/gao111/canal-adapter-go/config"
@@ -137,20 +136,6 @@ func PushMsg(columns []*protocol.Column ,eventType protocol.EventType ,dbName st
 	}
 
 	return
-}
-
-func syncEntry (columns []*protocol.Column ,eventType protocol.EventType ,dbName string , tableName string) {
-	sync := models.NewSync(dbName , tableName)
-	if eventType == protocol.EventType_DELETE {
-		//fmt.Println(fmt.Sprintf("---------------------------%s : %s ", dbName, tableName))
-		//printColumn(columns)
-		sync.DeleteSync(columns)
-	} else if eventType == protocol.EventType_INSERT {
-		//printColumn(columns)
-		sync.InsertSync(columns)
-	} else if eventType == protocol.EventType_UPDATE {
-		sync.UpdateSync(columns)
-	}
 }
 
 func printEntry(entrys []protocol.Entry) {

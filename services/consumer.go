@@ -18,126 +18,45 @@ package main
 
 import (
 	"fmt"
-	"github.com/Shopify/sarama"
-	"github.com/gao111/canal-adapter-go/beans"
-	"github.com/gao111/canal-adapter-go/sysinit"
+	"github.com/gao111/canal-adapter-go/config"
+	"github.com/gao111/canal-adapter-go/models"
 	"log"
 	"os"
-	"time"
 	"encoding/json"
 
-	"github.com/gao111/canal-adapter-go/client"
-	"github.com/gao111/canal-adapter-go/models"
+	"github.com/Shopify/sarama"
+	"github.com/gao111/canal-adapter-go/sysinit"
+	"github.com/gao111/canal-adapter-go/beans"
 	protocol "github.com/gao111/canal-adapter-go/protocol"
 	"github.com/golang/protobuf/proto"
-	"github.com/gao111/canal-adapter-go/config"
 )
 
 func main() {
-
-	// 192.168.199.17 替换成你的canal server的地址
-	// example 替换成-e canal.destinations=example 你自己定义的名字
-	connector := client.NewSimpleCanalConnector("8.129.15.77", 11111 , "", "", "example", 60000, 60*60*1000)
-	err := connector.Connect()
+	//根据消费者获取指定的主题分区的消费者,Offset这里指定为获取最新的消息.
+	partitionConsumer, err := sysinit.KafkaConsumer.ConsumePartition(config.Config.Kafka.Topic, 0, sarama.OffsetNewest)
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
-	}
-
-	// https://github.com/alibaba/canal/wiki/AdminGuide
-	//mysql 数据解析关注的表，Perl正则表达式.
-	//
-	//多个正则之间以逗号(,)分隔，转义符需要双斜杠(\\)
-	//
-	//常见例子：
-	//
-	//  1.  所有表：.*   or  .*\\..*
-	//	2.  canal schema下所有表： canal\\..*
-	//	3.  canal下的以canal打头的表：canal\\.canal.*
-	//	4.  canal schema下的一张表：canal\\.test1
-	//  5.  多个规则组合使用：canal\\..*,mysql.test1,mysql.test2 (逗号分隔)
-
-	err = connector.Subscribe(".*\\..*")
-	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		fmt.Println("error get partition consumer", err)
 	}
 
 	for {
-
-		message, err := connector.Get(100, nil, nil)
-		if err != nil {
-			log.Println(err)
-			os.Exit(1)
-		}
-		batchId := message.Id
-		if batchId == -1 || len(message.Entries) <= 0 {
-			time.Sleep(300 * time.Millisecond)
-			fmt.Println("===没有数据了===")
-			continue
-		}
-
-		printEntry(message.Entries)
-		go syncEntries(message.Entries)
-	}
-}
-
-
-func syncEntries (entrys []protocol.Entry) {
-	for _, entry := range entrys {
-		if entry.GetEntryType() == protocol.EntryType_TRANSACTIONBEGIN || entry.GetEntryType() == protocol.EntryType_TRANSACTIONEND {
-			continue
-		}
-		rowChange := new(protocol.RowChange)
-
-		err := proto.Unmarshal(entry.GetStoreValue(), rowChange)
-		checkError(err)
-		if rowChange != nil {
-			eventType := rowChange.GetEventType()
-			header := entry.GetHeader()
-			//fmt.Println(fmt.Sprintf("================> binlog[%s : %d],name[%s,%s], eventType: %s", header.GetLogfileName(), header.GetLogfileOffset(), header.GetSchemaName(), header.GetTableName(), header.GetEventType()))
-
-			for _, rowData := range rowChange.GetRowDatas() {
-
-
-				// 删除需要更新之前的数据
-				if eventType == protocol.EventType_DELETE {
-					go PushMsg(rowData.GetBeforeColumns() , eventType , header.GetSchemaName() , header.GetTableName())
-				} else {
-					// 更新和新增,需要之后更新后的数据
-					go PushMsg(rowData.GetAfterColumns() , eventType , header.GetSchemaName() , header.GetTableName())
-				}
+		select {
+		//接收消息通道和错误通道的内容.
+		case msg := <-partitionConsumer.Messages():
+			fmt.Println("msg offset: ", msg.Offset, " partition: ", msg.Partition, " timestrap: ", msg.Timestamp.Format("2006-Jan-02 15:04"), " value: ", string(msg.Value))
+			var binlogBean beans.BinlogBean
+			err := json.Unmarshal(msg.Value, &binlogBean)
+			if err != nil {
+				log.Printf("解析数据出错 , err:%s" , err)
 			}
+
+			go syncEntry(binlogBean.Columns , binlogBean.EventType , binlogBean.SchemaName , binlogBean.TableName)
+
+		case err := <-partitionConsumer.Errors():
+			fmt.Println(err.Err)
 		}
 	}
 }
 
-// 将binlog消息异步存入kafka消息队列
-func PushMsg(columns []*protocol.Column ,eventType protocol.EventType ,dbName string , tableName string) {
-	binlogBean := beans.BinlogBean{
-		Columns:    columns,
-		EventType:  eventType,
-		SchemaName: dbName,
-		TableName:  tableName,
-	}
-
-	b, err := json.Marshal(binlogBean)
-	if err != nil {
-		return
-	}
-
-	//发送的消息,主题,key
-	msg := &sarama.ProducerMessage{
-		Topic: config.Config.Kafka.Topic,
-		Key:   sarama.StringEncoder(""),
-		Value: sarama.ByteEncoder(b),
-	}
-	if _, _, err = sysinit.KafkaProducer.SendMessage(msg); err != nil {
-		log.Printf("PushMsg.send(push pushMsg:%v) error(%v)", binlogBean, err)
-	}
-
-	return
-}
 
 func syncEntry (columns []*protocol.Column ,eventType protocol.EventType ,dbName string , tableName string) {
 	sync := models.NewSync(dbName , tableName)
