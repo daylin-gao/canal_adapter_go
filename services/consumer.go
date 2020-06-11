@@ -17,17 +17,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gao111/canal-adapter-go/config"
 	"github.com/gao111/canal-adapter-go/models"
-	"log"
 	"os"
-	"encoding/json"
 
 	"github.com/Shopify/sarama"
-	"github.com/gao111/canal-adapter-go/sysinit"
 	"github.com/gao111/canal-adapter-go/beans"
 	protocol "github.com/gao111/canal-adapter-go/protocol"
+	"github.com/gao111/canal-adapter-go/sysinit"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -46,10 +45,12 @@ func main() {
 			var binlogBean beans.BinlogBean
 			err := json.Unmarshal(msg.Value, &binlogBean)
 			if err != nil {
-				log.Printf("解析数据出错 , err:%s" , err)
+				// 这里解析部分字段报错
+				// err:json: cannot unmarshal object into Go struct field Column.Columns.IsNullPresent of type com_alibaba_otter_canal_protocol.isColumn_IsNullPresent
+				//log.Printf("解析数据出错 , err:%s" , err)
 			}
 
-			go syncEntry(binlogBean.Columns , binlogBean.EventType , binlogBean.SchemaName , binlogBean.TableName)
+			go syncEntry(binlogBean.Columns, binlogBean.EventType, binlogBean.SchemaName, binlogBean.TableName)
 
 		case err := <-partitionConsumer.Errors():
 			fmt.Println(err.Err)
@@ -57,9 +58,8 @@ func main() {
 	}
 }
 
-
-func syncEntry (columns []*protocol.Column ,eventType protocol.EventType ,dbName string , tableName string) {
-	sync := models.NewSync(dbName , tableName)
+func syncEntry(columns []*protocol.Column, eventType protocol.EventType, dbName string, tableName string) {
+	sync := models.NewSync(dbName, tableName)
 	if eventType == protocol.EventType_DELETE {
 		//fmt.Println(fmt.Sprintf("---------------------------%s : %s ", dbName, tableName))
 		//printColumn(columns)
