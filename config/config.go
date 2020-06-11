@@ -20,6 +20,11 @@ var Config = struct {
 		User     string `env:"DBUser" default:""`
 		Password string `env:"DBPassword" default:""`
 	}
+	Kafka       struct {
+		Host    string `env:"KafkaHost" default:""`
+		Port    string `env:"KafkaPort" default:""`
+		Topic   string `env:"KafkaTopic" default:""`
+	}
 }{}
 
 var Root = os.Getenv("GOPATH") + "/src/canal_adapter_go"

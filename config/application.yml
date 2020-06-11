@@ -8,3 +8,8 @@ db:
   port: 3306
   user: lifesonic
   password: lcxadmin@2016
+
+kafka:
+  host: 8.129.15.77
+  port: 9092
+  topic: canal_consumer

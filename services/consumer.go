@@ -18,14 +18,19 @@ package main
 
 import (
 	"fmt"
+	"github.com/Shopify/sarama"
+	"github.com/gao111/canal-adapter-go/beans"
+	"github.com/gao111/canal-adapter-go/sysinit"
 	"log"
 	"os"
 	"time"
+	"encoding/json"
 
 	"github.com/gao111/canal-adapter-go/client"
+	"github.com/gao111/canal-adapter-go/models"
 	protocol "github.com/gao111/canal-adapter-go/protocol"
 	"github.com/golang/protobuf/proto"
-	"github.com/gao111/canal-adapter-go/models"
+	"github.com/gao111/canal-adapter-go/config"
 )
 
 func main() {
@@ -68,11 +73,11 @@ func main() {
 		batchId := message.Id
 		if batchId == -1 || len(message.Entries) <= 0 {
 			time.Sleep(300 * time.Millisecond)
-			//fmt.Println("===没有数据了===")
+			fmt.Println("===没有数据了===")
 			continue
 		}
 
-		//printEntry(message.Entries)
+		printEntry(message.Entries)
 		go syncEntries(message.Entries)
 	}
 }
@@ -93,16 +98,45 @@ func syncEntries (entrys []protocol.Entry) {
 			//fmt.Println(fmt.Sprintf("================> binlog[%s : %d],name[%s,%s], eventType: %s", header.GetLogfileName(), header.GetLogfileOffset(), header.GetSchemaName(), header.GetTableName(), header.GetEventType()))
 
 			for _, rowData := range rowChange.GetRowDatas() {
+
+
 				// 删除需要更新之前的数据
 				if eventType == protocol.EventType_DELETE {
-					go syncEntry(rowData.GetBeforeColumns() , eventType , header.GetSchemaName() , header.GetTableName())
+					go PushMsg(rowData.GetBeforeColumns() , eventType , header.GetSchemaName() , header.GetTableName())
 				} else {
 					// 更新和新增,需要之后更新后的数据
-					go syncEntry(rowData.GetAfterColumns() , eventType , header.GetSchemaName() , header.GetTableName())
+					go PushMsg(rowData.GetAfterColumns() , eventType , header.GetSchemaName() , header.GetTableName())
 				}
 			}
 		}
 	}
+}
+
+// 将binlog消息异步存入kafka消息队列
+func PushMsg(columns []*protocol.Column ,eventType protocol.EventType ,dbName string , tableName string) {
+	binlogBean := beans.BinlogBean{
+		Columns:    columns,
+		EventType:  eventType,
+		SchemaName: dbName,
+		TableName:  tableName,
+	}
+
+	b, err := json.Marshal(binlogBean)
+	if err != nil {
+		return
+	}
+
+	//发送的消息,主题,key
+	msg := &sarama.ProducerMessage{
+		Topic: config.Config.Kafka.Topic,
+		Key:   sarama.StringEncoder(""),
+		Value: sarama.ByteEncoder(b),
+	}
+	if _, _, err = sysinit.KafkaProducer.SendMessage(msg); err != nil {
+		log.Printf("PushMsg.send(push pushMsg:%v) error(%v)", binlogBean, err)
+	}
+
+	return
 }
 
 func syncEntry (columns []*protocol.Column ,eventType protocol.EventType ,dbName string , tableName string) {

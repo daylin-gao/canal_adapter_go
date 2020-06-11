@@ -1,6 +1,7 @@
 module github.com/gao111/canal-adapter-go
 
 require (
+	github.com/Shopify/sarama v1.26.4
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.2.0
 	github.com/jinzhu/configor v1.2.0
